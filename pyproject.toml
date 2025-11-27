@@ -1,0 +1,12 @@
+[project]
+name = "pulsoximeter"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "luma.oled>=3.14.0",
+    "Pillow>=10.0.0",
+    "RPi.GPIO>=0.7.1",
+    "spidev>=3.6",
+]
