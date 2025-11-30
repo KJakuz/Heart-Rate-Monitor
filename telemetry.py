@@ -1,7 +1,22 @@
+from datetime import datetime
 import azure
 from azure.iot.device import IoTHubDeviceClient, Message
+from pydantic import BaseModel
 
 CONNECTION_STRING = ""
+
+
+class SensorData(BaseModel):
+    heart_rate: float
+    oxygen: float
+
+
+class TelemetryMessage(BaseModel):
+    device_id: str
+    timestamp: datetime
+    data: SensorData
+
+# TODO: Add support for batch messages
 
 
 class Telemetry:
@@ -15,5 +30,19 @@ class Telemetry:
         except Exception as e:
             print(f"Error: {e}")
 
-    def send_measurement(self, message: str):  # TODO: Standarized format for message?
-        self.client.send_message(Message(message))
+    def format_message(self, x1: float, x2: float) -> TelemetryMessage:
+        """Message format can be specified as BaseModel"""
+        return TelemetryMessage(
+            device_id="rb1",
+            timestamp=datetime.now(),
+            data=SensorData(x1, x2)
+        )
+
+    def send_measurement(self, message: TelemetryMessage):
+        try:
+            self.client.send_message(Message(message.model_dump_json()))
+        except Exception as e:
+            print(e)
+
+    def close_connection(self):
+        self.client.disconnect()
