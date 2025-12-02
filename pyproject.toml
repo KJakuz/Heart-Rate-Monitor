@@ -6,7 +6,11 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "luma.oled>=3.14.0",
+    "numpy>=2.3.5",
     "Pillow>=10.0.0",
     "RPi.GPIO>=0.7.1",
+    "scipy>=1.16.3",
+    "smbus>=1.1.post2",
+    "sparkfun-qwiic-max3010x>=2.0.0",
     "spidev>=3.6",
 ]
