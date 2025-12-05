@@ -15,6 +15,7 @@ class HeartRateMonitor(object):
 
     def __init__(self, print_raw=False, print_result=False):
         self.bpm = 0
+        self.spo = 0
         if print_raw is True:
             print('IR, Red')
         self.print_raw = print_raw
@@ -46,6 +47,10 @@ class HeartRateMonitor(object):
 
                 if len(ir_data) == 100:
                     bpm, valid_bpm, spo2, valid_spo2 = hrcalc.calc_hr_and_spo2(ir_data, red_data)
+                    if(valid_spo2):
+                        self.spo = spo2
+                    else:
+                        self.spo = 0
                     if valid_bpm:
                         bpms.append(bpm)
                         while len(bpms) > 4:
