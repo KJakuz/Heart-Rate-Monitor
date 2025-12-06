@@ -74,6 +74,80 @@ def draw_spo2_symbol(draw, center_x, center_y, size, fill_color, text_color):
     text_y = center_y - 2
     draw.text((text_x, text_y), "O₂", fill=text_color, font=FONT_LARGE)
 
+
+def draw_hrv(draw, hrv_status, hrv_results):
+    """
+    Draw HRV status and results.
+    
+    Args:
+        draw: ImageDraw object
+        hrv_status: Current HRV state ('idle', 'collecting', 'ready')
+        hrv_results: Either percentage (float) for 'collecting' or dict for 'ready'
+    """
+    if hrv_status == 'idle':
+        draw.text((25, 100), "NO FINGER", fill=(0, 255, 0), font=FONT_LARGE)
+        draw.text((28, 110), "DETECTED", fill=(0, 255, 0), font=FONT_LARGE)
+
+    elif hrv_status == 'collecting':
+        # hrv_results is a percentage number
+        percentage = hrv_results if hrv_results is not None else 0
+        hrv_text = f"HRV Calculations: {percentage}%"
+        draw.text((15, 95), hrv_text, fill=(0, 255, 0), font=FONT_SMALL)
+        
+        # Draw loading bar
+        bar_x = 15
+        bar_y = 108
+        bar_width = 98
+        bar_height = 8
+        
+        # Draw outline
+        draw.rectangle(
+            [(bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height)],
+            outline=(0, 255, 0),
+            fill=(0, 0, 0)
+        )
+        
+        # Draw filled portion based on progress
+        if percentage > 0:
+            fill_width = int((bar_width - 2) * (percentage / 100.0))
+            draw.rectangle(
+                [(bar_x + 1, bar_y + 1), (bar_x + 1 + fill_width, bar_y + bar_height - 1)],
+                fill=(0, 255, 0)
+            )
+
+    elif hrv_status == 'ready':
+        # hrv_results is a dictionary
+        if isinstance(hrv_results, dict) and hrv_results.get('valid'):
+            rmssd = hrv_results['rmssd']
+            pnn50 = hrv_results['pnn50']
+            
+            # Interpret RMSSD: LOW < 20ms, MED 20-50ms, HIGH > 50ms
+            if rmssd < 20:
+                rmssd_level = "LOW"
+                rmssd_color = (255, 0, 0)
+            elif rmssd < 50:
+                rmssd_level = "MED"
+                rmssd_color = (255, 255, 0)
+            else:
+                rmssd_level = "HIGH"
+                rmssd_color = (0, 255, 0)
+            
+            # Interpret pNN50: LOW < 3%, MED 3-20%, HIGH > 20%
+            if pnn50 < 3:
+                pnn_level = "LOW"
+                pnn_color = (0, 0, 255)
+            elif pnn50 < 20:
+                pnn_level = "MED"
+                pnn_color = (255, 255, 0)
+            else:
+                pnn_level = "HIGH"
+                pnn_color = (0, 255, 0)
+            
+            draw.text((15, 90), f"RMSSD: {rmssd_level}", fill=rmssd_color, font=FONT_SMALL)
+            draw.text((15, 100), f"{rmssd}ms", fill=(255, 255, 255), font=FONT_SMALL)
+            draw.text((15, 110), f"pNN50: {pnn_level}", fill=pnn_color, font=FONT_SMALL)
+            draw.text((15, 120), f"{pnn50}%", fill=(255, 255, 255), font=FONT_SMALL)
+
 class PulseDisplay:
     """Manages the OLED display for pulse oximeter readings."""
 
@@ -85,7 +159,8 @@ class PulseDisplay:
         self.current_bpm = 0
         self.current_spo = 0
 
-    def update_bpm(self, bpm=None, spo=None):
+
+    def update_display(self, bpm=None, spo=None, hrv_status='idle', hrv_results=None):
         """
         Update display with new BPM and SpO2 values.
 
@@ -128,8 +203,12 @@ class PulseDisplay:
             draw.text((90, 5), spo_text, fill=(255, 0, 0), font=FONT_LARGE)
             draw.text((95, 20), "spo", fill=(255, 0, 0), font=FONT_SMALL)
 
+            draw_hrv(draw, hrv_status, hrv_results)
+
+
         time.sleep(0.05)
         self.frame += 1
+
 
     def test_display(self):
         """Test the display with cycling colors (for debugging only)."""
