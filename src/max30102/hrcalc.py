@@ -12,12 +12,35 @@ SAMPLE_FREQ = 25    # Samples per second
 BUFFER_SIZE = 100   # Sampling frequency * 4
 
 
+def _filter_and_find_peaks(ir_data, sample_freq=SAMPLE_FREQ):
+    """
+    Apply bandpass filter and detect peaks in IR data.
+    
+    Args:
+        ir_data: Array of infrared LED readings
+        sample_freq: Sampling frequency in Hz
+    
+    Returns:
+        tuple: (peaks, ir_filtered)
+    """
+    ir_data = np.array(ir_data)
+    
+    # Bandpass filter (0.5Hz - 4Hz) to isolate heartbeat signal
+    sos = scipy.signal.butter(2, [0.5, 4], 'bandpass', fs=sample_freq, output='sos')
+    ir_filtered = scipy.signal.sosfiltfilt(sos, ir_data)
+    
+    # Dynamic prominence: 10% of signal range
+    signal_range = np.max(ir_filtered) - np.min(ir_filtered)
+    prominence = max(signal_range * 0.1, 10)  # Minimum 10 to avoid noise
+    
+    peaks, _ = scipy.signal.find_peaks(ir_filtered, distance=10, prominence=prominence)
+    
+    return peaks, ir_filtered
+
+
 def calc_hr_and_spo2(ir_data, red_data):
     """
     Calculate heart rate and SpO2 from PPG signals.
-
-    By detecting peaks of PPG cycle and corresponding AC/DC
-    of red/infra-red signal, the ratio for SpO2 is computed.
 
     Args:
         ir_data: Array of infrared LED readings
@@ -26,20 +49,10 @@ def calc_hr_and_spo2(ir_data, red_data):
     Returns:
         tuple: (hr, hr_valid, spo2, spo2_valid, hrv_metrics)
     """
-    # Ensure inputs are numpy arrays
     ir_data = np.array(ir_data)
     red_data = np.array(red_data)
 
-    # Bandpass Filter (0.5Hz - 4Hz)
-    # Removes DC component and high frequency noise
-    sos = scipy.signal.butter(2, [0.5, 4], 'bandpass', fs=SAMPLE_FREQ, output='sos')
-    ir_filtered = scipy.signal.sosfiltfilt(sos, ir_data)
-
-
-    #  Peak Detection
-    # distance=10 samples (0.4s) corresponds to max 150 BPM
-    # prominence ensures we pick significant peaks
-    peaks, _ = scipy.signal.find_peaks(ir_filtered, distance=10, prominence=100)
+    peaks, _ = _filter_and_find_peaks(ir_data)
 
     # Calculate BPM
     if len(peaks) >= 2:
@@ -103,9 +116,8 @@ def calc_hr_and_spo2(ir_data, red_data):
                         30.054 * ratio_avg_scaled / 100.0 + 94.845)
                 spo2_valid = True
 
-            hrv_metrics = calc_hrv_metrics(peaks, SAMPLE_FREQ)
 
-    return hr, hr_valid, spo2, spo2_valid, hrv_metrics
+    return hr, hr_valid, spo2, spo2_valid
 
 
 def calc_hrv_metrics(peaks, sample_freq=25):
@@ -191,14 +203,7 @@ def calc_hrv_from_buffer(ir_buffer, sample_freq=25):
             'valid': False
         }
     
-    ir_data = np.array(ir_buffer)
-    
-    # Bandpass filter (0.5Hz - 4Hz) to isolate heartbeat signal
-    sos = scipy.signal.butter(2, [0.5, 4], 'bandpass', fs=sample_freq, output='sos')
-    ir_filtered = scipy.signal.sosfiltfilt(sos, ir_data)
-    
-    # Peak detection on full buffer
-    peaks, _ = scipy.signal.find_peaks(ir_filtered, distance=10, prominence=100)
+    peaks, _ = _filter_and_find_peaks(ir_buffer, sample_freq)
     
     # Use existing calc_hrv_metrics for the actual calculation
     return calc_hrv_metrics(peaks, sample_freq)

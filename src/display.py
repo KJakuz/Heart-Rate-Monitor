@@ -148,6 +148,67 @@ def draw_hrv(draw, hrv_status, hrv_results):
             draw.text((15, 110), f"pNN50: {pnn_level}", fill=pnn_color, font=FONT_SMALL)
             draw.text((15, 120), f"{pnn50}%", fill=(255, 255, 255), font=FONT_SMALL)
 
+def draw_ekg(draw, data, bounds, color, finger_present=True):
+    """
+    Draw an EKG-like waveform.
+    
+    Args:
+        draw: ImageDraw object
+        data: List of numerical values (raw sensor data)
+        bounds: Tuple (x, y, width, height) of the drawing area
+        color: RGB tuple for line color
+        finger_present: Whether finger is detected (controls display)
+    """
+    x_start, y_start, width, height = bounds
+    y_center = y_start + height / 2
+    
+    if not finger_present:
+        return
+    
+    if len(data) < 6:
+        return
+    
+    # smoothing for cleaner signal
+    smoothed = []
+    for i in range(2, len(data) - 2):
+        val = (data[i-2] + data[i-1] + data[i] + data[i+1] + data[i+2]) / 5.0
+        smoothed.append(val)
+        
+    # Calculate derivative (inverted) to turn rapid drops into positive spikes
+    derivative = []
+    for i in range(len(smoothed) - 1):
+        diff = smoothed[i] - smoothed[i+1]
+        derivative.append(diff)
+
+    if not derivative:
+        return
+
+    # Auto-scale logic
+    data_to_plot = derivative
+    min_val = min(data_to_plot)
+    max_val = max(data_to_plot)
+    val_range = max_val - min_val
+    
+    # if signal is too small, don't draw
+    if val_range < 200:
+        return
+        
+    points = []
+    step_x = width / (len(data_to_plot) - 1) if len(data_to_plot) > 1 else 0
+    
+    for i, val in enumerate(data_to_plot):
+        x = x_start + (i * step_x)
+        
+        norm = (val - min_val) / val_range - 0.5
+        norm = max(-0.5, min(0.5, norm))
+        
+        y = y_center - (norm * height * 0.9)
+        points.append((x, y))
+        
+    # Draw with thicker line for better visibility
+    draw.line(points, fill=color, width=2)
+
+
 class PulseDisplay:
     """Manages the OLED display for pulse oximeter readings."""
 
@@ -160,17 +221,23 @@ class PulseDisplay:
         self.current_spo = 0
 
 
-    def update_display(self, bpm=None, spo=None, hrv_status='idle', hrv_results=None):
+    def update_display(self, bpm=None, spo=None, hrv_status='idle', hrv_results=None, raw_data=None):
         """
         Update display with new BPM and SpO2 values.
 
         Args:
             bpm: Heart rate in beats per minute
             spo: Blood oxygen saturation percentage
+            hrv_status: Status of HRV collection
+            hrv_results: HRV results or progress
+            raw_data: Optional list of raw sensor values for EKG plot
         """
         if bpm is not None and spo is not None:
             self.current_bpm = bpm
             self.current_spo = spo
+            
+        # Use provided buffer or empty
+        waveform = raw_data if raw_data is not None else []
 
         # Calculate pulsing heart scale
         beat_cycle = (self.frame % 20) / 20.0
@@ -202,6 +269,17 @@ class PulseDisplay:
             spo_text = f"{round(float(self.current_spo), 2)}"
             draw.text((90, 5), spo_text, fill=(255, 0, 0), font=FONT_LARGE)
             draw.text((95, 20), "spo", fill=(255, 0, 0), font=FONT_SMALL)
+            
+            # Draw EKG Waveform in center (only when finger is present)
+            finger_present = self.current_bpm > 0
+            if waveform:
+                draw_ekg(
+                    draw, 
+                    waveform, 
+                    bounds=(14, 45, 100, 40),
+                    color=(0, 255, 255),
+                    finger_present=finger_present
+                )
 
             draw_hrv(draw, hrv_status, hrv_results)
 
